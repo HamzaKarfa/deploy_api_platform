@@ -1,0 +1,24 @@
+api_platform:
+    mapping:
+        paths: ['%kernel.project_dir%/src/Entity']
+ 
+    patch_formats:
+        json: ['application/merge-patch+json']
+        jsonld:   ['application/ld+json']
+        jsonhal:  ['application/hal+json']
+        jsonapi:  ['application/vnd.api+json']
+        xml:      ['application/xml', 'text/xml']
+        yaml:     ['application/x-yaml']
+        csv:      ['text/csv']
+        html:     ['text/html']
+    formats:
+        json: ['application/json']
+        jsonld:   ['application/ld+json']
+        html:     ['text/html']
+        multipart: ['multipart/form-data']
+    swagger:
+         api_keys:
+             apiKey:
+                name: Authorization
+                type: header
+    show_webby: false

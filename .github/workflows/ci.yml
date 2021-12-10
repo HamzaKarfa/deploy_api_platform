@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: ~
+
+
+jobs:
+  tests:
+    name: CI
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_ENTRYPOINT: https://localhost
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull images
+        run: docker-compose -f docker-compose.yml -f docker-compose.ci.yml pull --ignore-pull-failures || true
+      - name: Start services
+        run: docker-compose -f docker-compose.yml -f docker-compose.ci.yml up --build -d
+      - name: Wait for services
+        run: |
+          while status="$(docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" "$(docker-compose ps -q php)")"; do
+            case $status in
+              starting) sleep 1;;
+              healthy) exit 0;;
+              unhealthy)
+                docker-compose ps
+                docker-compose logs
+                exit 1
+              ;;
+            esac
+          done
+          exit 1
+      - name: Check HTTP reachability
+        run: curl -v -o /dev/null http://localhost
+      - name: Check HTTPS reachability
+        run: curl  -vk -o /dev/null https://localhost
+      - name: Migrate
+        run: docker-compose exec -T php bin/console -e test doctrine:migrations:migrate --no-interaction
+      - name: Install PHPUnit
+        run: docker-compose exec -T php composer require -n symfony/test-pack symfony/http-client justinrainbow/json-schema
+      - name: PHPUnit
+        run: docker-compose exec -T php vendor/bin/phpunit /srv/api/tests
+      - name: Doctrine Schema Validator
+        run: docker-compose -f docker-compose.yml -f docker-compose.ci.yml exec -T php bin/console doctrine:schema:validate --skip-sync
+      - name: Jest
+        run: docker-compose -f docker-compose.yml -f docker-compose.ci.yml exec -T pwa yarn test --ci --passWithNoTests
+      
+      - uses: actions/checkout@v2
+        name: checkout
+
+      - uses: repo-sync/pull-request@v2
+        name: pull-request
+        with:
+          destination_branch: "master"
+          pr_title: "Pulling ${{ github.ref }} into master"
+          pr_body: "automated PR"
+          pr_reviewer: "test"
+          pr_draft: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
